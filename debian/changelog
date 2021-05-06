@@ -1,3 +1,9 @@
+pve-manager (6.4-4rpve1) pve; urgency=medium
+
+  * Ignore podman errors
+
+ -- Tim <tim.j.wilkinson@gmail.com>  Thu, 06 May 2021 00:08:03 -0700
+
 pve-manager (6.4-4) pve; urgency=medium
 
   * ceph monitor: automatically disable insecure global ID reclaim after
