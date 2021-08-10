@@ -2,64 +2,54 @@ Ext.define('PVE.menu.TemplateMenu', {
     extend: 'Ext.menu.Menu',
 
     initComponent: function() {
-	var me = this;
+	let me = this;
 
-	var nodename = me.pveSelNode.data.node;
-	if (!nodename) {
+	let info = me.pveSelNode.data;
+	if (!info.node) {
 	    throw "no node name specified";
 	}
-
-	var vmid = me.pveSelNode.data.vmid;
-	if (!vmid) {
+	if (!info.vmid) {
 	    throw "no VM ID specified";
 	}
 
-	var guestType = me.pveSelNode.data.type;
-	if (guestType !== 'qemu' && guestType != 'lxc') {
-	    throw "invalid guest type";
+	let guestType = me.pveSelNode.data.type;
+	if (guestType !== 'qemu' && guestType !== 'lxc') {
+	    throw `invalid guest type ${guestType}`;
 	}
 
-	var vmname = me.pveSelNode.data.name;
+	let template = me.pveSelNode.data.template;
 
-	var template = me.pveSelNode.data.template;
+	me.title = (guestType === 'qemu' ? 'VM ' : 'CT ') + info.vmid;
 
-	var vm_command = function(cmd, params) {
-	    Proxmox.Utils.API2Request({
-		params: params,
-		url: '/nodes/' + nodename + '/' + guestType + '/' + vmid + "/status/" + cmd,
-		method: 'POST',
-		failure: function(response, opts) {
-		    Ext.Msg.alert(gettext('Error'), response.htmlStatus);
-		},
-	    });
-	};
-
-	me.title = (guestType === 'qemu' ? 'VM ' : 'CT ') + vmid;
+	let caps = Ext.state.Manager.get('GuiCap');
+	let standaloneNode = PVE.data.ResourceStore.getNodes().length < 2;
 
 	me.items = [
 	    {
 		text: gettext('Migrate'),
 		iconCls: 'fa fa-fw fa-send-o',
+		hidden: standaloneNode || !caps.vms['VM.Migrate'],
 		handler: function() {
-		    var win = Ext.create('PVE.window.Migrate', {
+		    Ext.create('PVE.window.Migrate', {
 			vmtype: guestType,
-			nodename: nodename,
-			vmid: vmid,
+			nodename: info.node,
+			vmid: info.vmid,
+			autoShow: true,
 		    });
-		    win.show();
 		},
 	    },
 	    {
 		text: gettext('Clone'),
 		iconCls: 'fa fa-fw fa-clone',
+		hidden: !caps.vms['VM.Clone'],
 		handler: function() {
-		    var win = Ext.create('PVE.window.Clone', {
-			nodename: nodename,
+		    Ext.create('PVE.window.Clone', {
+			nodename: info.node,
 			guestType: guestType,
-			vmid: vmid,
+			vmid: info.vmid,
 			isTemplate: template,
+			autoShow: true,
 		    });
-		    win.show();
 		},
 	    },
 	];

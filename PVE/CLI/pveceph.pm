@@ -35,7 +35,7 @@ my $nodename = PVE::INotify::nodename();
 my $upid_exit = sub {
     my $upid = shift;
     my $status = PVE::Tools::upid_read_status($upid);
-    exit($status eq 'OK' ? 0 : -1);
+    exit(PVE::Tools::upid_status_is_error($status) ? -1 : 0);
 };
 
 sub setup_environment {
@@ -116,9 +116,8 @@ __PACKAGE__->register_method ({
 	properties => {
 	    version => {
 		type => 'string',
-		# for buster, luminous kept for testing/upgrade purposes only! - FIXME: remove with 6.2?
-		enum => ['luminous', 'nautilus', 'octopus'],
-		default => 'nautilus',
+		enum => ['octopus', 'pacific'],
+		default => 'pacific',
 		description => "Ceph version to install.",
 		optional => 1,
 	    },
@@ -128,30 +127,34 @@ __PACKAGE__->register_method ({
 		optional => 1,
 		description => "Allow experimental versions. Use with care!",
 	    },
+	    'test-repository' => {
+		type => 'boolean',
+		default => 0,
+		optional => 1,
+		description => "Use the test, not the main repository. Use with care!",
+	    },
 	},
     },
     returns => { type => 'null' },
     code => sub {
 	my ($param) = @_;
 
-	my $default_vers = qr/^(?:nautilus|octopus)$/;
-	my $cephver = $param->{version} || $default_vers;
+	my $cephver = $param->{version} || 'pacific'; # NOTE: always change default here too!
+
+	my $repo = $param->{'test-repository'} ? 'test' : 'main';
 
 	my $repolist;
-	if ($cephver eq 'nautilus') {
-	    $repolist = "deb http://download.proxmox.com/debian/ceph-nautilus buster main\n";
-	} elsif ($cephver eq 'luminous') {
-	    die "Not allowed to select version '$cephver'\n" if !$param->{'allow-experimental'};
-	    $repolist = "deb http://download.proxmox.com/debian/ceph-luminous buster main\n";
-	} elsif ($cephver eq 'octopus') {
-	    $repolist = "deb http://download.proxmox.com/debian/ceph-octopus buster main\n";
+	if ($cephver eq 'octopus') {
+	    $repolist = "deb http://download.proxmox.com/debian/ceph-octopus bullseye $repo\n";
+	} elsif ($cephver eq 'pacific') {
+	    $repolist = "deb http://download.proxmox.com/debian/ceph-pacific bullseye $repo\n";
 	} else {
-	    die "not implemented ceph version: $cephver";
+	    die "unsupported ceph version: $cephver";
 	}
 	PVE::Tools::file_set_contents("/etc/apt/sources.list.d/ceph.list", $repolist);
 
 	warn "WARNING: installing non-default ceph release '$cephver'!\n"
-	    if $cephver !~ $default_vers;
+	    if $cephver !~ qr/^(?:octopus|pacific)$/;
 
 	local $ENV{DEBIAN_FRONTEND} = 'noninteractive';
 	print "update available package list\n";
@@ -170,6 +173,7 @@ __PACKAGE__->register_method ({
 	    ceph-mds
 	    ceph-fuse
 	    gdisk
+	    nvme-cli
 	);
 
 	print "start installation\n";
@@ -177,7 +181,12 @@ __PACKAGE__->register_method ({
 	    die "apt failed during ceph installation ($?)\n";
 	}
 
-	print "\ninstalled ceph $cephver successfully\n";
+	print "\ninstalled ceph $cephver successfully!\n";
+
+	print "\nreloading API to load new Ceph RADOS library...\n";
+	run_command([
+	    'systemctl', 'try-reload-or-restart', 'pvedaemon.service', 'pveproxy.service'
+	]);
 
 	return undef;
     }});

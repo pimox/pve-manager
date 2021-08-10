@@ -38,6 +38,7 @@ JSSRC= 							\
 	form/GlobalSearchField.js			\
 	form/GroupSelector.js				\
 	form/GuestIDSelector.js				\
+	form/HashAlgorithmSelector.js			\
 	form/HotplugFeatureSelector.js			\
 	form/IPProtocolSelector.js			\
 	form/IPRefSelector.js				\
@@ -104,6 +105,7 @@ JSSRC= 							\
 	window/Settings.js				\
 	window/Snapshot.js				\
 	window/StartupEdit.js				\
+	window/DownloadUrlToStorage.js 			\
 	window/Wizard.js				\
 	ha/Fencing.js					\
 	ha/GroupEdit.js					\
@@ -119,6 +121,7 @@ JSSRC= 							\
 	dc/AuthEditBase.js				\
 	dc/AuthEditAD.js				\
 	dc/AuthEditLDAP.js				\
+	dc/AuthEditOpenId.js				\
 	dc/AuthView.js					\
 	dc/Backup.js					\
 	dc/Cluster.js					\
@@ -263,6 +266,7 @@ JSSRC= 							\
 	storage/IScsiEdit.js				\
 	storage/LVMEdit.js				\
 	storage/LvmThinEdit.js				\
+	storage/BTRFSEdit.js				\
 	storage/NFSEdit.js				\
 	storage/PBSEdit.js				\
 	storage/RBDEdit.js				\
@@ -274,12 +278,19 @@ JSSRC= 							\
 	Workspace.js					\
 # end of JSSRC list
 
-all: pvemanagerlib.js
+all:
 
+.lint-incremental: ${JSSRC}
+	eslint $?
+	touch "$@"
+
+.PHONY: lint
+check: lint
 lint: ${JSSRC}
 	eslint --strict ${JSSRC}
+	touch ".lint-incremental"
 
-pvemanagerlib.js: OnlineHelpInfo.js ${JSSRC}
+pvemanagerlib.js: .lint-incremental OnlineHelpInfo.js ${JSSRC}
 	cat OnlineHelpInfo.js ${JSSRC} >$@.tmp
 	mv $@.tmp $@
 
@@ -295,7 +306,7 @@ install: pvemanagerlib.js
 .PHONY: clean
 clean:
 	find . -name '*~' -exec rm {} ';'
-	rm -rf pvemanagerlib.js OnlineHelpInfo.js
+	rm -rf pvemanagerlib.js OnlineHelpInfo.js .lint-incremental
 
 
 

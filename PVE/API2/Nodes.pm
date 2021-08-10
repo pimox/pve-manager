@@ -11,6 +11,7 @@ use JSON;
 use POSIX qw(LONG_MAX);
 use Time::Local qw(timegm_nocheck);
 use Socket;
+use IO::Socket::SSL;
 
 use PVE::API2Tools;
 use PVE::APLInfo;
@@ -68,12 +69,6 @@ use base qw(PVE::RESTHandler);
 __PACKAGE__->register_method ({
     subclass => "PVE::API2::Qemu",
     path => 'qemu',
-});
-
-# FIXME: move into capabilities/qemu
-__PACKAGE__->register_method ({
-    subclass => "PVE::API2::Qemu::CPU",
-    path => 'cpu',
 });
 
 __PACKAGE__->register_method ({
@@ -205,7 +200,7 @@ __PACKAGE__->register_method ({
     permissions => { user => 'all' },
     description => "Node index.",
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    node => get_standard_option('pve-node'),
 	},
@@ -228,7 +223,6 @@ __PACKAGE__->register_method ({
 	    { name => 'ceph' },
 	    { name => 'certificates' },
 	    { name => 'config' },
-	    { name => 'cpu' },
 	    { name => 'disks' },
 	    { name => 'dns' },
 	    { name => 'firewall' },
@@ -238,6 +232,7 @@ __PACKAGE__->register_method ({
 	    { name => 'netstat' },
 	    { name => 'network' },
 	    { name => 'qemu' },
+	    { name => 'query-url-metadata' },
 	    { name => 'replication' },
 	    { name => 'report' },
 	    { name => 'rrd' }, # fixme: remove?
@@ -273,7 +268,7 @@ __PACKAGE__->register_method ({
     permissions => { user => 'all' },
     description => "API version details",
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    node => get_standard_option('pve-node'),
 	},
@@ -311,7 +306,7 @@ __PACKAGE__->register_method({
     description => "Read node status",
     proxyto => 'node',
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    node => get_standard_option('pve-node'),
 	},
@@ -514,7 +509,7 @@ __PACKAGE__->register_method({
     description => "Reboot or shutdown a node.",
     proxyto => 'node',
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    node => get_standard_option('pve-node'),
 	    command => {
@@ -609,7 +604,7 @@ __PACKAGE__->register_method({
     },
     description => "Read node RRD statistics (returns PNG)",
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    node => get_standard_option('pve-node'),
 	    timeframe => {
@@ -654,7 +649,7 @@ __PACKAGE__->register_method({
     },
     description => "Read node RRD statistics",
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    node => get_standard_option('pve-node'),
 	    timeframe => {
@@ -695,7 +690,7 @@ __PACKAGE__->register_method({
     },
     protected => 1,
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    node => get_standard_option('pve-node'),
 	    start => {
@@ -903,15 +898,9 @@ __PACKAGE__->register_method ({
     },
     description => "Creates a VNC Shell proxy.",
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    node => get_standard_option('pve-node'),
-	    upgrade => {
-		type => 'boolean',
-		description => "Deprecated, use the 'cmd' property instead! Run 'apt-get dist-upgrade' instead of normal shell.",
-		optional => 1,
-		default => 0,
-	    },
 	    cmd => {
 		type => 'string',
 		description => "Run specific command or default to login.",
@@ -948,7 +937,7 @@ __PACKAGE__->register_method ({
 	},
     },
     returns => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    user => { type => 'string' },
 	    ticket => { type => 'string' },
@@ -964,7 +953,10 @@ __PACKAGE__->register_method ({
 	my ($user, undef, $realm) = PVE::AccessControl::verify_username($rpcenv->get_user());
 
 	raise_perm_exc("realm != pam") if $realm ne 'pam';
-	raise_perm_exc('user != root@pam') if $param->{upgrade} && $user ne 'root@pam';
+
+	if (defined($param->{cmd}) && $param->{cmd} eq 'upgrade' && $user ne 'root@pam') {
+	    raise_perm_exc('user != root@pam');
+	}
 
 	my $node = $param->{node};
 
@@ -976,10 +968,6 @@ __PACKAGE__->register_method ({
 
 	my ($port, $remcmd) = $get_vnc_connection_info->($node);
 
-	# FIXME: remove with 6.0
-	if ($param->{upgrade}) {
-	    $param->{cmd} = 'upgrade';
-	}
 	my $shcmd = get_shell_command($user, $param->{cmd}, $param->{'cmd-opts'});
 
 	my $timeout = 10;
@@ -1053,12 +1041,6 @@ __PACKAGE__->register_method ({
 	additionalProperties => 0,
 	properties => {
 	    node => get_standard_option('pve-node'),
-	    upgrade => {
-		type => 'boolean',
-		description => "Deprecated, use the 'cmd' property instead! Run 'apt-get dist-upgrade' instead of normal shell.",
-		optional => 1,
-		default => 0,
-	    },
 	    cmd => {
 		type => 'string',
 		description => "Run specific command or default to login.",
@@ -1097,10 +1079,6 @@ __PACKAGE__->register_method ({
 
 	my ($port, $remcmd) = $get_vnc_connection_info->($node);
 
-	# FIXME: remove with 7.0
-	if ($param->{upgrade}) {
-	    $param->{cmd} = 'upgrade';
-	}
 	my $shcmd = get_shell_command($user, $param->{cmd}, $param->{'cmd-opts'});
 
 	my $realcmd = sub {
@@ -1139,9 +1117,9 @@ __PACKAGE__->register_method({
 	description => "Restricted to users on realm 'pam'. You also need to pass a valid ticket (vncticket).",
 	check => ['perm', '/nodes/{node}', [ 'Sys.Console' ]],
     },
-    description => "Opens a weksocket for VNC traffic.",
+    description => "Opens a websocket for VNC traffic.",
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    node => get_standard_option('pve-node'),
 	    vncticket => {
@@ -1193,16 +1171,10 @@ __PACKAGE__->register_method ({
     },
     description => "Creates a SPICE shell.",
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    node => get_standard_option('pve-node'),
 	    proxy => get_standard_option('spice-proxy', { optional => 1 }),
-	    upgrade => {
-		type => 'boolean',
-		description => "Deprecated, use the 'cmd' property instead! Run 'apt-get dist-upgrade' instead of normal shell.",
-		optional => 1,
-		default => 0,
-	    },
 	    cmd => {
 		type => 'string',
 		description => "Run specific command or default to login.",
@@ -1229,17 +1201,17 @@ __PACKAGE__->register_method ({
 	my ($user, undef, $realm) = PVE::AccessControl::verify_username($authuser);
 
 	raise_perm_exc("realm != pam") if $realm ne 'pam';
-	raise_perm_exc('user != root@pam') if $param->{upgrade} && $user ne 'root@pam';
+
+	if (defined($param->{cmd}) && $param->{cmd} eq 'upgrade' && $user ne 'root@pam') {
+	    raise_perm_exc('user != root@pam');
+	}
 
 	my $node = $param->{node};
 	my $proxy = $param->{proxy};
 
 	my $authpath = "/nodes/$node";
 	my $permissions = 'Sys.Console';
-	# FIXME: remove with 6.0
-	if ($param->{upgrade}) {
-	    $param->{cmd} = 'upgrade';
-	}
+
 	my $shcmd = get_shell_command($user, $param->{cmd}, $param->{'cmd-opts'});
 
 	my $title = "Shell on '$node'";
@@ -1257,14 +1229,14 @@ __PACKAGE__->register_method({
     description => "Read DNS settings.",
     proxyto => 'node',
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    node => get_standard_option('pve-node'),
 	},
     },
     returns => {
 	type => "object",
-   	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    search => {
 		description => "Search domain for host-name lookup.",
@@ -1307,7 +1279,7 @@ __PACKAGE__->register_method({
     proxyto => 'node',
     protected => 1,
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    node => get_standard_option('pve-node'),
 	    search => {
@@ -1357,7 +1329,7 @@ __PACKAGE__->register_method({
     },
     returns => {
 	type => "object",
-   	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    timezone => {
 		description => "Time zone",
@@ -1402,7 +1374,7 @@ __PACKAGE__->register_method({
     proxyto => 'node',
     protected => 1,
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    node => get_standard_option('pve-node'),
 	    timezone => {
@@ -1430,7 +1402,7 @@ __PACKAGE__->register_method({
     description => "Get list of appliances.",
     proxyto => 'node',
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    node => get_standard_option('pve-node'),
 	},
@@ -1445,14 +1417,12 @@ __PACKAGE__->register_method({
     code => sub {
 	my ($param) = @_;
 
-	my $res = [];
-
 	my $list = PVE::APLInfo::load_data();
 
-	foreach my $template (keys %{$list->{all}}) {
-	    my $pd = $list->{all}->{$template};
-	    next if $pd->{'package'} eq 'pve-web-news';
-	    push @$res, $pd;
+	my $res = [];
+	for my $appliance (values %{$list->{all}}) {
+	    next if $appliance->{'package'} eq 'pve-web-news';
+	    push @$res, $appliance;
 	}
 
 	return $res;
@@ -1469,17 +1439,18 @@ __PACKAGE__->register_method({
     proxyto => 'node',
     protected => 1,
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    node => get_standard_option('pve-node'),
 	    storage => get_standard_option('pve-storage-id', {
 		description => "The storage where the template will be stored",
 		completion => \&PVE::Storage::complete_storage_enabled,
 	    }),
-	    template => { type => 'string',
-			  description => "The template which will downloaded",
-			  maxLength => 255,
-			  completion => \&complete_templet_repo,
+	    template => {
+		type => 'string',
+		description => "The template which will downloaded",
+		maxLength => 255,
+		completion => \&complete_templet_repo,
 	    },
 	},
     },
@@ -1488,112 +1459,134 @@ __PACKAGE__->register_method({
 	my ($param) = @_;
 
 	my $rpcenv = PVE::RPCEnvironment::get();
-
 	my $user = $rpcenv->get_user();
 
 	my $node = $param->{node};
+	my $template = $param->{template};
 
 	my $list = PVE::APLInfo::load_data();
-
-	my $template = $param->{template};
-	my $pd = $list->{all}->{$template};
-
-	raise_param_exc({ template => "no such template"}) if !$pd;
+	my $appliance = $list->{all}->{$template};
+	raise_param_exc({ template => "no such template"}) if !$appliance;
 
 	my $cfg = PVE::Storage::config();
 	my $scfg = PVE::Storage::storage_check_enabled($cfg, $param->{storage}, $node);
 
-	die "unknown template type '$pd->{type}'\n"
-	    if !($pd->{type} eq 'openvz' || $pd->{type} eq 'lxc');
+	die "unknown template type '$appliance->{type}'\n"
+	    if !($appliance->{type} eq 'openvz' || $appliance->{type} eq 'lxc');
 
 	die "storage '$param->{storage}' does not support templates\n"
 	    if !$scfg->{content}->{vztmpl};
 
-	my $src = $pd->{location};
 	my $tmpldir = PVE::Storage::get_vztmpl_dir($cfg, $param->{storage});
-	my $dest = "$tmpldir/$template";
-	my $tmpdest = "$tmpldir/${template}.tmp.$$";
 
-	my $worker = sub  {
-	    my $upid = shift;
+	my $worker = sub {
+	    my $dccfg = PVE::Cluster::cfs_read_file('datacenter.cfg');
 
-	    print "starting template download from: $src\n";
-	    print "target file: $dest\n";
-
-	    my $check_hash = sub {
-		my ($template_info, $filename, $noerr) = @_;
-
-		my $digest;
-		my $expected;
-
-		eval {
-		    open(my $fh, '<', $filename) or die "Can't open '$filename': $!";
-		    binmode($fh);
-		    if (defined($template_info->{sha512sum})) {
-			$expected = $template_info->{sha512sum};
-			$digest = Digest::SHA->new(512)->addfile($fh)->hexdigest;
-		    } elsif (defined($template_info->{md5sum})) {
-			#fallback to MD5
-			$expected = $template_info->{md5sum};
-			$digest = Digest::MD5->new->addfile($fh)->hexdigest;
-		    } else {
-			die "no expected checksum defined";
-		    }
-		    close($fh);
-		};
-
-		die "checking hash failed - $@\n" if $@ && !$noerr;
-
-		return ($digest, $digest ? lc($digest) eq lc($expected) : 0);
-	    };
-
-	    eval {
-		if (-f $dest) {
-		    my ($hash, $correct) = &$check_hash($pd, $dest, 1);
-
-		    if ($hash && $correct) {
-			print "file already exists $hash - no need to download\n";
-			return;
-		    }
-		}
-
-		local %ENV;
-		my $dccfg = PVE::Cluster::cfs_read_file('datacenter.cfg');
-		if ($dccfg->{http_proxy}) {
-		    $ENV{http_proxy} = $dccfg->{http_proxy};
-		}
-
-		my @cmd = ('/usr/bin/wget', '--progress=dot:mega', '-O', $tmpdest, $src);
-		if (system (@cmd) != 0) {
-		    die "download failed - $!\n";
-		}
-
-		my ($hash, $correct) = &$check_hash($pd, $tmpdest);
-
-		die "could not calculate checksum\n" if !$hash;
-
-		if (!$correct) {
-		    my $expected = $pd->{sha512sum} // $pd->{md5sum};
-		    die "wrong checksum: $hash != $expected\n";
-		}
-
-		if (!rename($tmpdest, $dest)) {
-		    die "unable to save file - $!\n";
-		}
-	    };
-	    my $err = $@;
-
-	    unlink $tmpdest;
-
-	    if ($err) {
-		print "\n";
-		die $err if $err;
-	    }
-
-	    print "download finished\n";
+	    PVE::Tools::download_file_from_url("$tmpldir/$template", $appliance->{location}, {
+		hash_required => 1,
+		sha512sum => $appliance->{sha512sum},
+		md5sum => $appliance->{md5sum},
+		http_proxy => $dccfg->{http_proxy},
+	    });
 	};
 
-	return $rpcenv->fork_worker('download', undef, $user, $worker);
+	my $upid = $rpcenv->fork_worker('download', $template, $user, $worker);
+
+	return $upid;
+    }});
+
+__PACKAGE__->register_method({
+    name => 'query_url_metadata',
+    path => 'query-url-metadata',
+    method => 'GET',
+    description => "Query metadata of an URL: file size, file name and mime type.",
+    proxyto => 'node',
+    permissions => {
+	check => ['perm', '/', [ 'Sys.Audit', 'Sys.Modify' ]],
+    },
+    parameters => {
+	additionalProperties => 0,
+	properties => {
+	    node => get_standard_option('pve-node'),
+	    url => {
+		description => "The URL to query the metadata from.",
+		type => 'string',
+		pattern => 'https?://.*',
+	    },
+	    'verify-certificates' => {
+		description => "If false, no SSL/TLS certificates will be verified.",
+		type => 'boolean',
+		optional => 1,
+		default => 1,
+	    }
+	},
+    },
+    returns => {
+	type => "object",
+	properties => {
+	    filename => {
+		type => 'string',
+		optional => 1,
+	    },
+	    size => {
+		type => 'integer',
+		renderer => 'bytes',
+		optional => 1,
+	    },
+	    mimetype => {
+		type => 'string',
+		optional => 1,
+	    },
+	},
+    },
+    code => sub {
+	my ($param) = @_;
+
+	my $url = $param->{url};
+
+	my $ua = LWP::UserAgent->new();
+
+	my $dccfg = PVE::Cluster::cfs_read_file('datacenter.cfg');
+	if ($dccfg->{http_proxy}) {
+	    $ua->proxy('http', $dccfg->{http_proxy});
+	}
+
+	my $verify = $param->{'verify-certificates'} // 1;
+	if (!$verify) {
+	    $ua->ssl_opts(
+		verify_hostname => 0,
+		SSL_verify_mode => IO::Socket::SSL::SSL_VERIFY_NONE,
+	    );
+	}
+
+	my $req = HTTP::Request->new(HEAD => $url);
+	my $res = $ua->request($req);
+
+	die "invalid server response: '" . $res->status_line() . "'\n" if ($res->code() != 200);
+
+	my $size = $res->header("Content-Length");
+	my $disposition = $res->header("Content-Disposition");
+	my $type = $res->header("Content-Type");
+
+	my $filename;
+
+	if ($disposition && ($disposition =~ m/filename="([^"]*)"/ || $disposition =~ m/filename=([^;]*)/)) {
+	    $filename = $1;
+	} elsif ($url =~ m!^[^?]+/([^?/]*)(?:\?.*)?$!) {
+	    $filename = $1;
+	}
+
+	# Content-Type: text/html; charset=utf-8
+	if ($type && $type =~ m/^([^;]+);/) {
+	    $type = $1;
+	}
+
+	my $ret = {};
+	$ret->{filename} = $filename if $filename;
+	$ret->{size} = $size + 0 if $size;
+	$ret->{mimetype} = $type if $type;
+
+	return $ret;
     }});
 
 __PACKAGE__->register_method({
@@ -1607,7 +1600,7 @@ __PACKAGE__->register_method({
     description => "Gather various systems information about a node",
     proxyto => 'node',
     parameters => {
-    additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    node => get_standard_option('pve-node'),
 	},
@@ -1727,7 +1720,7 @@ __PACKAGE__->register_method ({
     proxyto => 'node',
     description => "Start all VMs and containers located on this node (by default only those with onboot=1).",
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    node => get_standard_option('pve-node'),
 	    force => {
@@ -1811,7 +1804,7 @@ __PACKAGE__->register_method ({
 			}
 
 			my $status = PVE::Tools::upid_read_status($upid);
-			if ($status eq 'OK') {
+			if (!PVE::Tools::upid_status_is_error($status)) {
 			    # use default delay to reduce load
 			    my $delay = defined($d->{up}) ? int($d->{up}) : $default_delay;
 			    if ($delay > 0) {
@@ -1867,7 +1860,7 @@ __PACKAGE__->register_method ({
     proxyto => 'node',
     description => "Stop all VMs and Containers.",
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    node => get_standard_option('pve-node'),
 	    vms => {
@@ -2224,7 +2217,7 @@ __PACKAGE__->register_method ({
     permissions => { user => 'all' },
     description => "Cluster node index.",
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {},
     },
     returns => {

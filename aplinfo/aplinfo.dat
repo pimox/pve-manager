@@ -43,6 +43,19 @@ sha512sum: b799553c595e30f82ca7820794914d881cbe7372bdd6e2c9cdd9d90d41698dfd5cbb3
 Infopage: https://linuxcontainers.org
 Description: LXC default image for alpine 3.13 (20210419)
 
+Package: alpine-3.14-default
+Version: 20210623
+Type: lxc
+OS: alpine
+Section: system
+Maintainer: Proxmox Support Team <support@proxmox.com>
+Architecture: amd64
+Location: system/alpine-3.14-default_20210623_amd64.tar.xz
+md5sum: 06f638cc942c7965f5b5414300e01e60
+sha512sum: 87709566840d4ef5fe7bba63afce183f12c27e7499315d1729886ab0ca0c14599093b9da937037b86093c0ba15385d51b987f79a612150950e9e197757deeb37
+Infopage: https://linuxcontainers.org
+Description: LXC default image for alpine 3.14 (20210623)
+
 Package: archlinux-base
 Version: 20210420-1
 Type: lxc
@@ -125,19 +138,6 @@ Infopage: https://devuan.org
 Description: Devuan 3.0 (standard)
  A small Devuan Beowulf system including a minimal set of essential packages.
 
-Package: fedora-32-default
-Version: 20200430
-Type: lxc
-OS: fedora
-Section: system
-Maintainer: Proxmox Support Team <support@proxmox.com>
-Architecture: amd64
-Location: system/fedora-32-default_20200430_amd64.tar.xz
-md5sum: 0b8ba4a36a6b875b677ece1d1a198955
-sha512sum: bfe34436ddada3ef3162c5a4d72df54d48e11c798a54f9722c9316371bdb33cf771994dfe7ca8bfd91562ae92cfc0c83c55cf209d64e765be1ca7ee4c05ea52f
-Infopage: https://linuxcontainers.org
-Description: LXC default image for fedora 32 (20200430)
-
 Package: fedora-33-default
 Version: 20201115
 Type: lxc
@@ -150,6 +150,19 @@ md5sum: 391e2a431179b24c474e225b61dd415d
 sha512sum: 48787a928769627a05ccb9969e5419d97d2aa0fb17a6cffe1e281b95b5b4ab0d4a43a3b903ffbcd79a3a5d06a9edf71c5bda583773423d018ed2a519a8b64afb
 Infopage: https://linuxcontainers.org
 Description: LXC default image for fedora 33 (20201115)
+
+Package: fedora-34-default
+Version: 20210427
+Type: lxc
+OS: fedora
+Section: system
+Maintainer: Proxmox Support Team <support@proxmox.com>
+Architecture: amd64
+Location: system/fedora-34-default_20210427_amd64.tar.xz
+md5sum: 76781b32ab28bfa982de39f1becfd735
+sha512sum: df517f33a8c8f2f624113237a64317e12adf245966309bb5af4c2b5fb9122ca9b173c3db247d18e60b374b2087c089ac9ba641141ecae143257c83d22d2ca1a0
+Infopage: https://linuxcontainers.org
+Description: LXC default image for fedora 34 (20210427)
 
 Package: gentoo-current-default
 Version: 20200310

@@ -56,10 +56,16 @@ Ext.define('PVE.storage.StatusView', {
 	    title: gettext('Usage'),
 	    valueField: 'used',
 	    maxField: 'total',
+	    renderer: (val, max) => {
+		if (max === undefined) {
+		    return val;
+		}
+		return Proxmox.Utils.render_size_usage(val, max, true);
+	    },
 	},
     ],
 
     updateTitle: function() {
-	return;
+	// nothing
     },
 });

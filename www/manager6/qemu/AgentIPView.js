@@ -87,10 +87,10 @@ Ext.define('PVE.qemu.AgentIPView', {
 		    hidden: true,
 		    ui: 'default-toolbar',
 		    handler: function(btn) {
-			var me = this.up('pveAgentIPView');
+			let view = this.up('pveAgentIPView');
 
 			var win = Ext.create('PVE.window.IPInfo');
-			win.down('grid').getStore().setData(me.nics);
+			win.down('grid').getStore().setData(view.nics);
 			win.show();
 		    },
 		    text: gettext('More'),
@@ -104,8 +104,8 @@ Ext.define('PVE.qemu.AgentIPView', {
 	var ips = [];
 	nics.forEach(function(nic) {
 	    if (nic['hardware-address'] &&
-		nic['hardware-address'] != '00:00:00:00:00:00' &&
-		nic['hardware-address'] != '0:0:0:0:0:0') {
+		nic['hardware-address'] !== '00:00:00:00:00:00' &&
+		nic['hardware-address'] !== '0:0:0:0:0:0') {
 		var nic_ips = nic['ip-addresses'] || [];
 		nic_ips.forEach(function(ip) {
 		    var p = ip['ip-address'];
@@ -157,7 +157,6 @@ Ext.define('PVE.qemu.AgentIPView', {
 		    text = ips.join('<br>');
 		}
 	    } else if (me.nics && me.nics.error) {
-		var msg = gettext('Cannot get info from Guest Agent<br>Error: {0}');
 		text = Ext.String.format(text, me.nics.error.desc);
 	    }
 	} else if (me.agent) {

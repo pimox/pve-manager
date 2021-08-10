@@ -54,40 +54,39 @@ Ext.define('PVE.panel.Config', {
 	overflowHandler: 'scroller',
 	dock: 'left',
 	style: {
-	    backgroundColor: '#f5f5f5',
 	    padding: 0,
 	    margin: 0,
 	},
+	cls: 'pve-toolbar-bg',
 	items: {
 	    xtype: 'treelist',
 	    itemId: 'menu',
-	    ui: 'nav',
+	    ui: 'pve-nav',
 	    expanderOnly: true,
 	    expanderFirst: false,
 	    animation: false,
 	    singleExpand: false,
 	    listeners: {
 		selectionchange: function(treeList, selection) {
-		    var me = this.up('panel');
-		    me.suspendLayout = true;
-		    me.activateCard(selection.data.id);
-		    me.suspendLayout = false;
-		    me.updateLayout();
+		    if (!selection) {
+			return;
+		    }
+		    let view = this.up('panel');
+		    view.suspendLayout = true;
+		    view.activateCard(selection.data.id);
+		    view.suspendLayout = false;
+		    view.updateLayout();
 		},
 		itemclick: function(treelist, info) {
 		    var olditem = treelist.getSelection();
 		    var newitem = info.node;
 
-		    // when clicking on the expand arrow,
-		    // we don't select items, but still want
-		    // the original behaviour
+		    // when clicking on the expand arrow, we don't select items, but still want the original behaviour
 		    if (info.select === false) {
 			return;
 		    }
 
-		    // if you click on a different item which is open,
-		    // leave it open
-		    // else toggle the clicked item
+		    // click on a different, open item then leave it open, else toggle the clicked item
 		    if (olditem.data.id !== newitem.data.id &&
 			newitem.data.expanded === true) {
 			info.toggle = false;
@@ -123,6 +122,7 @@ Ext.define('PVE.panel.Config', {
 	    menu.setSelection(selection);
 	    return cardid;
 	}
+	return '';
     },
 
     activateCard: function(cardid) {
@@ -160,7 +160,7 @@ Ext.define('PVE.panel.Config', {
 	var activeTab; // leaving this undefined means items[0] will be the default tab
 
 	if (stateid) {
-	    var state = me.sp.get(stateid);
+	    let state = me.sp.get(stateid);
 	    if (state && state.value) {
 		// if this tab does not exist, it chooses the first
 		activeTab = state.value;
@@ -259,7 +259,7 @@ Ext.define('PVE.panel.Config', {
 		var acard = me.getLayout().getActiveItem().itemId;
 		// get the itemid of the new value
 		var ncard = state.value || me.firstItem;
-		if (ncard && acard != ncard) {
+		if (ncard && acard !== ncard) {
 		    // select the chosen item
 		    menu.setSelection(root.findChild('id', ncard, true) || root.firstChild);
 		}

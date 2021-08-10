@@ -100,9 +100,6 @@ sub storage_info {
     my $scfg = PVE::Storage::storage_config($cfg, $storage);
     my $type = $scfg->{type};
 
-    die "can't use storage type '$type' for backup\n"
-	if (!($type eq 'dir' || $type eq 'nfs' || $type eq 'glusterfs'
-	      || $type eq 'cifs' || $type eq 'cephfs' || $type eq 'pbs'));
     die "can't use storage '$storage' for backups - wrong content type\n"
 	if (!$scfg->{content}->{backup});
 
@@ -637,9 +634,12 @@ sub run_hook_script {
 	die "The hook script '$script' is not executable.\n";
     }
 
-    my $cmd = "$script $phase";
+    my $cmd = [$script, $phase];
 
-    $cmd .= " $task->{mode} $task->{vmid}" if ($task);
+    if ($task) {
+	push @$cmd, $task->{mode};
+	push @$cmd, $task->{vmid};
+    }
 
     local %ENV;
     # set immutable opts directly (so they are available in all phases)
@@ -649,8 +649,6 @@ sub run_hook_script {
     foreach my $ek (qw(vmtype hostname target logfile)) {
 	$ENV{uc($ek)} = $task->{$ek} if $task->{$ek};
     }
-    # FIXME: for backwards compatibility - drop with PVE 7.0
-    $ENV{TARFILE} = $task->{target} if $task->{target};
 
     run_command ($logfd, $cmd);
 }
@@ -884,20 +882,16 @@ sub exec_backup_task {
 	$task->{mode} = $mode;
 
    	debugmsg ('info', "backup mode: $mode", $logfd);
-
-	debugmsg ('info', "bandwidth limit: $opts->{bwlimit} KB/s", $logfd)
-	    if $opts->{bwlimit};
-
+	debugmsg ('info', "bandwidth limit: $opts->{bwlimit} KB/s", $logfd)  if $opts->{bwlimit};
 	debugmsg ('info', "ionice priority: $opts->{ionice}", $logfd);
 
 	if ($mode eq 'stop') {
-
 	    $plugin->prepare ($task, $vmid, $mode);
 
 	    $self->run_hook_script ('backup-start', $task, $logfd);
 
 	    if ($running) {
-		debugmsg ('info', "stopping vm", $logfd);
+		debugmsg ('info', "stopping virtual guest", $logfd);
 		$task->{vmstoptime} = time();
 		$self->run_hook_script ('pre-stop', $task, $logfd);
 		$plugin->stop_vm ($task, $vmid);
@@ -906,7 +900,6 @@ sub exec_backup_task {
 
 
 	} elsif ($mode eq 'suspend') {
-
 	    $plugin->prepare ($task, $vmid, $mode);
 
 	    $self->run_hook_script ('backup-start', $task, $logfd);
@@ -935,7 +928,6 @@ sub exec_backup_task {
 	    }
 
 	} elsif ($mode eq 'snapshot') {
-
 	    $self->run_hook_script ('backup-start', $task, $logfd);
 
 	    my $snapshot_count = $task->{snapshot_count} || 0;
@@ -994,23 +986,35 @@ sub exec_backup_task {
 	    debugmsg ('info', "archive file size: $cs", $logfd);
 	}
 
-	# purge older backup
 	if ($opts->{remove}) {
+	    my $keepstr = join(', ', map { "$_=$prune_options->{$_}" } sort keys %$prune_options);
+	    debugmsg ('info', "prune older backups with retention: $keepstr", $logfd);
+	    my $pruned = 0;
 	    if (!defined($opts->{storage})) {
 		my $bklist = get_backup_file_list($opts->{dumpdir}, $bkname, $task->{target});
 		PVE::Storage::prune_mark_backup_group($bklist, $prune_options);
 
 		foreach my $prune_entry (@{$bklist}) {
 		    next if $prune_entry->{mark} ne 'remove';
-
+		    $pruned++;
 		    my $archive_path = $prune_entry->{path};
 		    debugmsg ('info', "delete old backup '$archive_path'", $logfd);
 		    PVE::Storage::archive_remove($archive_path);
 		}
 	    } else {
-		my $logfunc = sub { debugmsg($_[0], $_[1], $logfd) };
-		PVE::Storage::prune_backups($cfg, $opts->{storage}, $prune_options, $vmid, $vmtype, 0, $logfunc);
+		my $pruned_list = PVE::Storage::prune_backups(
+		    $cfg,
+		    $opts->{storage},
+		    $prune_options,
+		    $vmid,
+		    $vmtype,
+		    0,
+		    sub { debugmsg($_[0], $_[1], $logfd) },
+		);
+		$pruned = scalar(grep { $_->{mark} eq 'remove' } $pruned_list->@*);
 	    }
+	    my $log_pruned_extra = $pruned > 0 ? " not covered by keep-retention policy" : "";
+	    debugmsg ('info', "pruned $pruned backup(s)${log_pruned_extra}", $logfd);
 	}
 
 	$self->run_hook_script ('backup-end', $task, $logfd);
@@ -1237,10 +1241,6 @@ sub verify_vzdump_parameters {
     $parse_prune_backups_maxfiles->($param, 'CLI parameters');
 
     $param->{all} = 1 if (defined($param->{exclude}) && !$param->{pool});
-
-    warn "option 'size' is deprecated and will be removed in a future " .
-	 "release, please update your script/configuration!\n"
-	if defined($param->{size});
 
     return if !$check_missing;
 

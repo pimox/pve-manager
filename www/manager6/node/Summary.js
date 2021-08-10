@@ -83,6 +83,31 @@ Ext.define('PVE.node.Summary', {
 	});
     },
 
+    updateRepositoryStatus: function() {
+	let me = this;
+	let repoStatus = me.nodeStatus.down('#repositoryStatus');
+
+	let nodename = me.pveSelNode.data.node;
+
+	Proxmox.Utils.API2Request({
+	    url: `/nodes/${nodename}/apt/repositories`,
+	    method: 'GET',
+	    failure: response => Ext.Msg.alert(gettext('Error'), response.htmlStatus),
+	    success: response => repoStatus.setRepositoryInfo(response.result.data['standard-repos']),
+	});
+
+	Proxmox.Utils.API2Request({
+	    url: `/nodes/${nodename}/subscription`,
+	    method: 'GET',
+	    failure: response => Ext.Msg.alert(gettext('Error'), response.htmlStatus),
+	    success: function(response, opts) {
+		const res = response.result;
+		const subscription = res?.data?.status.toLowerCase() === 'active';
+		repoStatus.setSubscriptionStatus(subscription);
+	    },
+	});
+    },
+
     initComponent: function() {
         var me = this;
 
@@ -109,8 +134,16 @@ Ext.define('PVE.node.Summary', {
 	    model: 'pve-rrd-node',
 	});
 
+	let nodeStatus = Ext.create('PVE.node.StatusView', {
+	    xtype: 'pveNodeStatus',
+	    rstore: rstore,
+	    width: 770,
+	    pveSelNode: me.pveSelNode,
+	});
+
 	Ext.apply(me, {
 	    tbar: [version_btn, '->', { xtype: 'proxmoxRRDTypeSelector' }],
+	    nodeStatus: nodeStatus,
 	    items: [
 		{
 		    xtype: 'container',
@@ -118,17 +151,12 @@ Ext.define('PVE.node.Summary', {
 		    layout: 'column',
 		    minWidth: 700,
 		    defaults: {
-			minHeight: 320,
+			minHeight: 325,
 			padding: 5,
 			columnWidth: 1,
 		    },
 		    items: [
-			{
-			    xtype: 'pveNodeStatus',
-			    rstore: rstore,
-			    width: 770,
-			    pveSelNode: me.pveSelNode,
-			},
+			nodeStatus,
 			{
 			    xtype: 'proxmoxRRDChart',
 			    title: gettext('CPU usage'),
@@ -178,6 +206,8 @@ Ext.define('PVE.node.Summary', {
 		},
 	    },
 	});
+
+	me.updateRepositoryStatus();
 
 	me.callParent();
 

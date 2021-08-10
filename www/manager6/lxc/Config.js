@@ -243,10 +243,12 @@ Ext.define('PVE.lxc.Config', {
 	    {
 		title: gettext('Task History'),
 		itemId: 'tasks',
-		iconCls: 'fa fa-list',
+		iconCls: 'fa fa-list-alt',
 		xtype: 'proxmoxNodeTasks',
 		nodename: nodename,
-		vmidFilter: vmid,
+		preFilter: {
+		    vmid,
+		},
 	    },
 	);
 

@@ -23,7 +23,7 @@ use PVE::Tools qw(extract_param);
 use PVE::API2::ACMEAccount;
 use PVE::API2::ACMEPlugin;
 use PVE::API2::Backup;
-use PVE::API2::BackupInfo;
+use PVE::API2::Cluster::BackupInfo;
 use PVE::API2::Cluster::Ceph;
 use PVE::API2::Cluster::MetricServer;
 use PVE::API2::ClusterConfig;
@@ -65,8 +65,8 @@ __PACKAGE__->register_method ({
 });
 
 __PACKAGE__->register_method ({
-    subclass => "PVE::API2::BackupInfo",
-    path => 'backupinfo',
+    subclass => "PVE::API2::Cluster::BackupInfo",
+    path => 'backup-info',
 });
 
 __PACKAGE__->register_method ({
@@ -131,6 +131,7 @@ __PACKAGE__->register_method ({
 	    { name => 'replication' },
 	    { name => 'tasks' },
 	    { name => 'backup' },
+	    { name => 'backup-info' },
 	    { name => 'ha' },
 	    { name => 'status' },
 	    { name => 'nextid' },
@@ -222,6 +223,11 @@ __PACKAGE__->register_method({
 		},
 		status => {
 		    description => "Resource type dependent status.",
+		    type => 'string',
+		    optional => 1,
+		},
+		name => {
+		    description => "Name of the resource.",
 		    type => 'string',
 		    optional => 1,
 		},
@@ -332,7 +338,7 @@ __PACKAGE__->register_method({
 	    for my $pool (sort keys %{$usercfg->{pools}}) {
 		my $d = $usercfg->{pools}->{$pool};
 
-		next if !$rpcenv->check($authuser, "/pool/$pool", [ 'Pool.Allocate' ], 1);
+		next if !$rpcenv->check($authuser, "/pool/$pool", [ 'Pool.Audit' ], 1);
 
 		my $entry = {
 		    id => "/pool/$pool",
@@ -382,6 +388,11 @@ __PACKAGE__->register_method({
 
 		if (defined(my $lock = $locked_vms->{$vmid}->{lock})) {
 		    $entry->{lock} = $lock;
+		}
+
+		if (defined($entry->{pool}) &&
+		    !$rpcenv->check($authuser, "/pool/$entry->{pool}", ['Pool.Audit'], 1)) {
+		    delete $entry->{pool};
 		}
 
 		# get ha status

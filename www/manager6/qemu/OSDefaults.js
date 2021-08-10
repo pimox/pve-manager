@@ -21,10 +21,10 @@ Ext.define('PVE.qemu.OSDefaults', {
     singleton: true, // will also force creation when loaded
 
     constructor: function() {
-	var me = this;
+	let me = this;
 
-	var addOS = function(settings) {
-		if (me.hasOwnProperty(settings.parent)) {
+	let addOS = function(settings) {
+		if (Object.prototype.hasOwnProperty.call(settings, 'parent')) {
 		    var child = Ext.clone(me[settings.parent]);
 		    me[settings.pveOS] = Ext.apply(child, settings);
 		} else {

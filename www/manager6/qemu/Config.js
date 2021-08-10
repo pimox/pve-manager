@@ -270,9 +270,11 @@ Ext.define('PVE.qemu.Config', {
 		title: gettext('Task History'),
 		itemId: 'tasks',
 		xtype: 'proxmoxNodeTasks',
-		iconCls: 'fa fa-list',
+		iconCls: 'fa fa-list-alt',
 		nodename: nodename,
-		vmidFilter: vmid,
+		preFilter: {
+		    vmid,
+		},
 	    },
 	);
 

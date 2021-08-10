@@ -62,8 +62,6 @@ Ext.define('PVE.panel.StoragePruneInputPanel', {
 
     onlineHelp: 'vzdump_retention',
 
-    keepLastEmptyText: gettext('1'),
-
     onGetValues: function(formValues) {
 	if (this.needMask) { // isMasked() may not yet be true if not rendered once
 	    return {};
@@ -78,7 +76,7 @@ Ext.define('PVE.panel.StoragePruneInputPanel', {
 	    }
 	    // always delete old 'maxfiles' on edit, we map it to keep-last on window load
 	    return {
-		delete: ['prune-backups', 'maxfiles'],
+		'delete': ['prune-backups', 'maxfiles'],
 	    };
 	}
 	let options = { 'prune-backups': retention };
@@ -89,15 +87,15 @@ Ext.define('PVE.panel.StoragePruneInputPanel', {
     },
 
     updateComponents: function() {
-	let panel = this;
+	let me = this;
 
-	let keepAll = panel.down('proxmoxcheckbox[name=keep-all]').getValue();
+	let keepAll = me.down('proxmoxcheckbox[name=keep-all]').getValue();
 	let anyValue = false;
-	panel.query('pmxPruneKeepField').forEach(field => {
+	me.query('pmxPruneKeepField').forEach(field => {
 	    anyValue = anyValue || field.getValue() !== null;
 	    field.setDisabled(keepAll);
 	});
-	panel.down('component[name=no-keeps-hint]').setHidden(anyValue || keepAll);
+	me.down('component[name=no-keeps-hint]').setHidden(anyValue || keepAll);
     },
 
     listeners: {
@@ -138,7 +136,7 @@ Ext.define('PVE.panel.StoragePruneInputPanel', {
 	    name: 'no-keeps-hint',
 	    hidden: true,
 	    padding: '5 1',
-	    html: gettext('Without any keep option, the nodes vzdump.conf or `keep-last 1` is used as fallback for backup jobs'),
+	    html: gettext('Without any keep option, the node\'s vzdump.conf or `keep-all` is used as fallback for backup jobs'),
 	},
 	{
 	    xtype: 'component',

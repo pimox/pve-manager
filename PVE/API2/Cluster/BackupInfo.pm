@@ -1,4 +1,4 @@
-package PVE::API2::BackupInfo;
+package PVE::API2::Cluster::BackupInfo;
 
 use strict;
 use warnings;
@@ -32,26 +32,37 @@ sub get_included_vmids {
 }
 
 __PACKAGE__->register_method({
-    name => 'get_backupinfo',
+    name => 'index',
     path => '',
     method => 'GET',
-    protected => 1,
-    description => "Stub, waits for future use.",
+    description => "Index for backup info related endpoints",
     parameters => {
-       additionalProperties => 0,
-       properties => {},
+	additionalProperties => 0,
+	properties => {},
     },
     returns => {
-       type => 'string',
-       description => 'Shows stub message',
+	type => 'array',
+	description => 'Directory index.',
+	items => {
+	    type => "object",
+	    properties => {
+		subdir => {
+		    type => 'string',
+		    description => 'API sub-directory endpoint',
+		},
+	    },
+	},
+	links => [ { rel => 'child', href => "{subdir}" } ],
     },
     code => sub {
-       return "Stub endpoint. There is nothing here yet.";
+	return [
+	   { subdir => 'not-backed-up' },
+	];
     }});
 
 __PACKAGE__->register_method({
     name => 'get_guests_not_in_backup',
-    path => 'not_backed_up',
+    path => 'not-backed-up',
     method => 'GET',
     protected => 1,
     description => "Shows all guests which are not covered by any backup job.",

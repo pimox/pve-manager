@@ -3,39 +3,39 @@ Ext.define('PVE.qemu.CmdMenu', {
 
     showSeparator: false,
     initComponent: function() {
-	var me = this;
+	let me = this;
 
-	var nodename = me.pveSelNode.data.node;
-	if (!nodename) {
+	let info = me.pveSelNode.data;
+	if (!info.node) {
 	    throw "no node name specified";
 	}
-
-	var vmid = me.pveSelNode.data.vmid;
-	if (!vmid) {
+	if (!info.vmid) {
 	    throw "no VM ID specified";
 	}
 
-	var vmname = me.pveSelNode.data.name;
-
-	var vm_command = function(cmd, params) {
+	let vm_command = function(cmd, params) {
 	    Proxmox.Utils.API2Request({
 		params: params,
-		url: '/nodes/' + nodename + '/qemu/' + vmid + "/status/" + cmd,
+		url: `/nodes/${info.node}/${info.type}/${info.vmid}/status/${cmd}`,
 		method: 'POST',
-		failure: function(response, opts) {
-		    Ext.Msg.alert('Error', response.htmlStatus);
-		},
+		failure: (response, opts) => Ext.Msg.alert(gettext('Error'), response.htmlStatus),
+	    });
+	};
+	let confirmedVMCommand = (cmd, params, confirmTask) => {
+	    let task = confirmTask || `qm${cmd}`;
+	    let msg = Proxmox.Utils.format_task_description(task, info.vmid);
+	    Ext.Msg.confirm(gettext('Confirm'), msg, btn => {
+		if (btn === 'yes') {
+		    vm_command(cmd, params);
+		}
 	    });
 	};
 
-	var caps = Ext.state.Manager.get('GuiCap');
+	let caps = Ext.state.Manager.get('GuiCap');
+	let standalone = PVE.data.ResourceStore.getNodes().length < 2;
 
-	var running = false;
-	var stopped = true;
-	var suspended = false;
-	var standalone = PVE.data.ResourceStore.getNodes().length < 2;
-
-	switch (me.pveSelNode.data.status) {
+	let running = false, stopped = true, suspended = false;
+	switch (info.status) {
 	    case 'running':
 		running = true;
 		stopped = false;
@@ -51,7 +51,7 @@ Ext.define('PVE.qemu.CmdMenu', {
 	    default: break;
 	}
 
-	me.title = "VM " + vmid;
+	me.title = "VM " + info.vmid;
 
 	me.items = [
 	    {
@@ -59,24 +59,14 @@ Ext.define('PVE.qemu.CmdMenu', {
 		iconCls: 'fa fa-fw fa-play',
 		hidden: running || suspended,
 		disabled: running || suspended,
-		handler: function() {
-		    vm_command('start');
-		},
+		handler: () => vm_command('start'),
 	    },
 	    {
 		text: gettext('Pause'),
 		iconCls: 'fa fa-fw fa-pause',
 		hidden: stopped || suspended,
 		disabled: stopped || suspended,
-		handler: function() {
-		    var msg = Proxmox.Utils.format_task_description('qmpause', vmid);
-		    Ext.Msg.confirm(gettext('Confirm'), msg, function(btn) {
-			if (btn !== 'yes') {
-			    return;
-			}
-			vm_command('suspend');
-		    });
-		},
+		handler: () => confirmedVMCommand('suspend', undefined, 'qmpause'),
 	    },
 	    {
 		text: gettext('Hibernate'),
@@ -84,70 +74,33 @@ Ext.define('PVE.qemu.CmdMenu', {
 		hidden: stopped || suspended,
 		disabled: stopped || suspended,
 		tooltip: gettext('Suspend to disk'),
-		handler: function() {
-		    var msg = Proxmox.Utils.format_task_description('qmsuspend', vmid);
-		    Ext.Msg.confirm(gettext('Confirm'), msg, function(btn) {
-			if (btn !== 'yes') {
-			    return;
-			}
-			vm_command('suspend', { todisk: 1 });
-		    });
-		},
+		handler: () => confirmedVMCommand('suspend', { todisk: 1 }),
 	    },
 	    {
 		text: gettext('Resume'),
 		iconCls: 'fa fa-fw fa-play',
 		hidden: !suspended,
-		handler: function() {
-		    vm_command('resume');
-		},
+		handler: () => vm_command('resume'),
 	    },
 	    {
 		text: gettext('Shutdown'),
 		iconCls: 'fa fa-fw fa-power-off',
 		disabled: stopped || suspended,
-		handler: function() {
-		    var msg = Proxmox.Utils.format_task_description('qmshutdown', vmid);
-		    Ext.Msg.confirm(gettext('Confirm'), msg, function(btn) {
-			if (btn !== 'yes') {
-			    return;
-			}
-
-			vm_command('shutdown');
-		    });
-		},
+		handler: () => confirmedVMCommand('shutdown'),
 	    },
 	    {
 		text: gettext('Stop'),
 		iconCls: 'fa fa-fw fa-stop',
 		disabled: stopped,
 		tooltip: Ext.String.format(gettext('Stop {0} immediately'), 'VM'),
-		handler: function() {
-		    var msg = Proxmox.Utils.format_task_description('qmstop', vmid);
-		    Ext.Msg.confirm(gettext('Confirm'), msg, function(btn) {
-			if (btn !== 'yes') {
-			    return;
-			}
-
-			vm_command("stop");
-		    });
-		},
+		handler: () => confirmedVMCommand('stop'),
 	    },
 	    {
 		text: gettext('Reboot'),
 		iconCls: 'fa fa-fw fa-refresh',
 		disabled: stopped,
 		tooltip: Ext.String.format(gettext('Reboot {0}'), 'VM'),
-		handler: function() {
-		    var msg = Proxmox.Utils.format_task_description('qmreboot', vmid);
-		    Ext.Msg.confirm(gettext('Confirm'), msg, function(btn) {
-			if (btn !== 'yes') {
-			    return;
-			}
-
-			vm_command("reboot");
-		    });
-		},
+		handler: () => confirmedVMCommand('reboot'),
 	    },
 	    {
 		xtype: 'menuseparator',
@@ -158,40 +111,34 @@ Ext.define('PVE.qemu.CmdMenu', {
 		iconCls: 'fa fa-fw fa-send-o',
 		hidden: standalone || !caps.vms['VM.Migrate'],
 		handler: function() {
-		    var win = Ext.create('PVE.window.Migrate', {
+		    Ext.create('PVE.window.Migrate', {
 			vmtype: 'qemu',
-			nodename: nodename,
-			vmid: vmid,
+			nodename: info.node,
+			vmid: info.vmid,
+			autoShow: true,
 		    });
-		    win.show();
 		},
 	    },
 	    {
 		text: gettext('Clone'),
 		iconCls: 'fa fa-fw fa-clone',
 		hidden: !caps.vms['VM.Clone'],
-		handler: function() {
-		    PVE.window.Clone.wrap(nodename, vmid, me.isTemplate, 'qemu');
-		},
+		handler: () => PVE.window.Clone.wrap(info.node, info.vmid, me.isTemplate, 'qemu'),
 	    },
 	    {
 		text: gettext('Convert to template'),
 		iconCls: 'fa fa-fw fa-file-o',
 		hidden: !caps.vms['VM.Allocate'],
 		handler: function() {
-		    var msg = Proxmox.Utils.format_task_description('qmtemplate', vmid);
-		    Ext.Msg.confirm(gettext('Confirm'), msg, function(btn) {
-			if (btn !== 'yes') {
-			    return;
+		    let msg = Proxmox.Utils.format_task_description('qmtemplate', info.vmid);
+		    Ext.Msg.confirm(gettext('Confirm'), msg, btn => {
+			if (btn === 'yes') {
+			    Proxmox.Utils.API2Request({
+				url: `/nodes/${info.node}/qemu/${info.vmid}/template`,
+				method: 'POST',
+				failure: (response, opts) => Ext.Msg.alert('Error', response.htmlStatus),
+			    });
 			}
-
-			Proxmox.Utils.API2Request({
-			     url: '/nodes/' + nodename + '/qemu/' + vmid + '/template',
-			     method: 'POST',
-			     failure: function(response, opts) {
-				Ext.Msg.alert('Error', response.htmlStatus);
-			     },
-			});
 		    });
 		},
 	    },
@@ -201,18 +148,19 @@ Ext.define('PVE.qemu.CmdMenu', {
 		iconCls: 'fa fa-fw fa-terminal',
 		handler: function() {
 		    Proxmox.Utils.API2Request({
-			url: '/nodes/' + nodename + '/qemu/' + vmid + '/status/current',
-			failure: function(response, opts) {
-			    Ext.Msg.alert('Error', response.htmlStatus);
-			},
-			success: function(response, opts) {
-			    var allowSpice = response.result.data.spice;
-			    var allowXtermjs = response.result.data.serial;
-			    var consoles = {
-				spice: allowSpice,
-				xtermjs: allowXtermjs,
-			    };
-			    PVE.Utils.openDefaultConsoleWindow(consoles, 'kvm', vmid, nodename, vmname);
+			url: `/nodes/${info.node}/qemu/${info.vmid}/status/current`,
+			failure: (response, opts) => Ext.Msg.alert('Error', response.htmlStatus),
+			success: function({ result: { data } }, opts) {
+			    PVE.Utils.openDefaultConsoleWindow(
+				{
+				    spice: data.spice,
+				    xtermjs: data.serial,
+				},
+				'kvm',
+				info.vmid,
+				info.node,
+				info.name,
+			    );
 			},
 		    });
 		},

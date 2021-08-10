@@ -17,9 +17,9 @@ Ext.define('PVE.ha.GroupInputPanel', {
     initComponent: function() {
 	var me = this;
 
-	var update_nodefield, update_node_selection;
+	let update_nodefield, update_node_selection;
 
-	var sm = Ext.create('Ext.selection.CheckboxModel', {
+	let sm = Ext.create('Ext.selection.CheckboxModel', {
 	    mode: 'SIMPLE',
 	    listeners: {
 		selectionchange: function(model, selected) {
@@ -28,12 +28,9 @@ Ext.define('PVE.ha.GroupInputPanel', {
 	    },
 	});
 
-	// use already cached data to avoid an API call
-	var data = PVE.data.ResourceStore.getNodes();
-
-	var store = Ext.create('Ext.data.Store', {
+	let store = Ext.create('Ext.data.Store', {
 	    fields: ['node', 'mem', 'cpu', 'priority'],
-	    data: data,
+	    data: PVE.data.ResourceStore.getNodes(), // use already cached data to avoid an API call
 	    proxy: {
 		type: 'memory',
 		reader: { type: 'json' },
@@ -84,9 +81,10 @@ Ext.define('PVE.ha.GroupInputPanel', {
 			isFormField: false,
 			listeners: {
 			    change: function(numberfield, value, old_value) {
-				var record = numberfield.getWidgetRecord();
+				let record = numberfield.getWidgetRecord();
 				record.set('priority', value);
 				update_nodefield(sm.getSelection());
+				record.commit();
 			    },
 			},
 		    },
@@ -94,17 +92,17 @@ Ext.define('PVE.ha.GroupInputPanel', {
 	    ],
 	});
 
-	var nodefield = Ext.create('Ext.form.field.Hidden', {
+	let nodefield = Ext.create('Ext.form.field.Hidden', {
 	    name: 'nodes',
 	    value: '',
 	    listeners: {
-		change: function(nodefield, value) {
+		change: function(field, value) {
 		    update_node_selection(value);
 		},
 	    },
 	    isValid: function() {
-		var value = nodefield.getValue();
-		return value && 0 !== value.length;
+		let value = this.getValue();
+		return value && value.length !== 0;
 	    },
 	});
 
@@ -112,14 +110,11 @@ Ext.define('PVE.ha.GroupInputPanel', {
 	    sm.deselectAll(true);
 
 	    string.split(',').forEach(function(e, idx, array) {
-		var res = e.split(':');
-
+		let [node, priority] = e.split(':');
 		store.each(function(record) {
-		    var node = record.get('node');
-
-		    if (node == res[0]) {
+		    if (record.get('node') === node) {
 			sm.select(record, true);
-			record.set('priority', res[1]);
+			record.set('priority', priority);
 			record.commit();
 		    }
 		});
@@ -128,19 +123,9 @@ Ext.define('PVE.ha.GroupInputPanel', {
 	};
 
 	update_nodefield = function(selected) {
-	    var nodes = '';
-	    var first_iteration = true;
-	    Ext.Array.each(selected, function(record) {
-		if (!first_iteration) {
-		    nodes += ',';
-		}
-		first_iteration = false;
-
-		nodes += record.data.node;
-		if (record.data.priority) {
-		    nodes += ':' + record.data.priority;
-		}
-	    });
+	    let nodes = selected
+		.map(({ data }) => data.node + (data.priority ? `:${data.priority}` : ''))
+		.join(',');
 
 	    // nodefield change listener calls us again, which results in a
 	    // endless recursion, suspend the event temporary to avoid this

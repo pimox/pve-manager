@@ -36,7 +36,7 @@ my $upid_exit = sub {
     my $upid = shift;
     my $status = PVE::Tools::upid_read_status($upid);
     print "Task $status\n";
-    exit($status eq 'OK' ? 0 : -1);
+    exit(PVE::Tools::upid_status_is_error($status) ? -1 : 0);
 };
 
 sub param_mapping {
@@ -181,7 +181,10 @@ our $cmddef = {
 	    foreach my $task (@$data) {
 		if (!defined($task->{status})) {
 		    $task->{status} = 'UNKNOWN';
-		} elsif ($task->{status} ne 'OK' && $task->{status} ne 'RUNNING') {
+		# RUNNING is set by the API call and needs to be checked explicitly
+		} elsif (PVE::Tools::upid_status_is_error($task->{status}) &&
+		    $task->{status} ne 'RUNNING')
+		{
 		    $task->{status} = 'ERROR';
 		}
 	    }

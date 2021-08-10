@@ -79,17 +79,15 @@ Ext.define('PVE.dc.NodeView', {
 	{
 	    type: 'up',
 	    handler: function() {
-		var me = this.up('grid');
-		var height = Math.max(me.getHeight()-50, 250);
-		me.setHeight(height);
+		let view = this.up('grid');
+		view.setHeight(Math.max(view.getHeight() - 50, 250));
 	    },
 	},
 	{
 	    type: 'down',
 	    handler: function() {
-		var me = this.up('grid');
-		var height = me.getHeight()+50;
-		me.setHeight(height);
+		let view = this.up('grid');
+		view.setHeight(view.getHeight() + 50);
 	    },
 	},
     ],
@@ -111,14 +109,15 @@ Ext.define('PVE.widget.ProgressBar', {
     ],
 
     setValue: function(value) {
-	var me = this;
+	let me = this;
+
 	me.callParent([value]);
 
 	me.removeCls(['warning', 'critical']);
 
 	if (value > 0.89) {
 	    me.addCls('critical');
-	} else if (value > 0.59) {
+	} else if (value > 0.75) {
 	    me.addCls('warning');
 	}
     },

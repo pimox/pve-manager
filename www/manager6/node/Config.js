@@ -230,6 +230,7 @@ Ext.define('PVE.node.Config', {
 		    xtype: 'proxmoxNodeAPT',
 		    title: gettext('Updates'),
 		    iconCls: 'fa fa-refresh',
+		    expandedOnInit: true,
 		    disabled: !caps.nodes['Sys.Console'],
 		    // do we want to link to system updates instead?
 		    itemId: 'apt',
@@ -241,6 +242,16 @@ Ext.define('PVE.node.Config', {
 			nodename: nodename,
 		    },
 		    nodename: nodename,
+		});
+
+		me.items.push({
+		    xtype: 'proxmoxNodeAPTRepositories',
+		    title: gettext('Repositories'),
+		    iconCls: 'fa fa-files-o',
+		    itemId: 'aptrepositories',
+		    nodename: nodename,
+		    onlineHelp: 'sysadmin_package_repositories',
+		    groups: ['apt'],
 		});
 	    }
 	}
@@ -279,6 +290,7 @@ Ext.define('PVE.node.Config', {
 		    iconCls: 'fa fa-hdd-o',
 		    nodename: nodename,
 		    includePartitions: true,
+		    supportsWipeDisk: true,
 		},
 		{
 		    xtype: 'pveLVMList',
@@ -389,10 +401,18 @@ Ext.define('PVE.node.Config', {
 	me.items.push(
 	    {
 		title: gettext('Task History'),
-		iconCls: 'fa fa-list',
+		iconCls: 'fa fa-list-alt',
 		itemId: 'tasks',
 		nodename: nodename,
 		xtype: 'proxmoxNodeTasks',
+		extraFilter: [
+		    {
+			xtype: 'pveGuestIDSelector',
+			fieldLabel: gettext('VMID'),
+			allowBlank: true,
+			name: 'vmid',
+		    },
+		],
 	    },
 	    {
 		title: gettext('Subscription'),

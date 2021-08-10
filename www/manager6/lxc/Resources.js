@@ -17,7 +17,7 @@ Ext.define('PVE.lxc.RessourceView', {
 
     initComponent: function() {
 	var me = this;
-	var i, confid;
+	let confid;
 
 	var nodename = me.pveSelNode.data.node;
 	if (!nodename) {
@@ -231,7 +231,7 @@ Ext.define('PVE.lxc.RessourceView', {
 	    var rowdef = rows[key];
 
 	    var pending = rec.data.delete || me.hasPendingChanges(key);
-	    var isDisk = rowdef.tdCls == 'pve-itype-icon-storage';
+	    var isDisk = rowdef.tdCls === 'pve-itype-icon-storage';
 	    var isUnusedDisk = key.match(/^unused\d+/);
 
 	    var noedit = rec.data.delete || !rowdef.editor;

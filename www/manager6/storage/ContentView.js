@@ -249,36 +249,50 @@ Ext.define('PVE.storage.ContentView', {
 
 	Proxmox.Utils.monStoreErrors(me, store);
 
-	let uploadButton = Ext.create('Proxmox.button.Button', {
-	    text: gettext('Upload'),
-	    handler: function() {
-		let win = Ext.create('PVE.storage.Upload', {
-		    nodename: nodename,
-		    storage: storage,
-		    contents: [content],
-		});
-		win.show();
-		win.on('destroy', reload);
-	    },
-	});
-
-	let removeButton = Ext.create('Proxmox.button.StdRemoveButton', {
-	    selModel: sm,
-	    delay: 5,
-	    callback: function() {
-		reload();
-	    },
-	    baseurl: baseurl + '/',
-	});
-
 	if (!me.tbar) {
 	    me.tbar = [];
 	}
 	if (me.useUploadButton) {
-	    me.tbar.push(uploadButton);
+	    me.tbar.unshift(
+		{
+		    xtype: 'button',
+		    text: gettext('Upload'),
+		    disabled: !me.enableUploadButton,
+		    handler: function() {
+			Ext.create('PVE.storage.Upload', {
+			    nodename: nodename,
+			    storage: storage,
+			    contents: [content],
+			    autoShow: true,
+			    taskDone: () => reload(),
+			});
+		    },
+		},
+		{
+		    xtype: 'button',
+		    text: gettext('Download from URL'),
+		    disabled: !me.enableDownloadUrlButton,
+		    handler: function() {
+			Ext.create('PVE.window.DownloadUrlToStorage', {
+			    nodename: nodename,
+			    storage: storage,
+			    content: content,
+			    autoShow: true,
+			    taskDone: () => reload(),
+			});
+		    },
+		},
+		'-',
+	    );
 	}
 	if (!me.useCustomRemoveButton) {
-	    me.tbar.push(removeButton);
+	    me.tbar.push({
+		xtype: 'proxmoxStdRemoveButton',
+		selModel: sm,
+		delay: 5,
+		callback: () => reload(),
+		baseurl: baseurl + '/',
+	    });
 	}
 	me.tbar.push(
 	    '->',
