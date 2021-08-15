@@ -49,7 +49,6 @@ Ext.define('PVE.ceph.CephVersionSelector', {
 	    },
 	},
 	data: [
-	    { release: "octopus", version: "15.2" },
 	    { release: "pacific", version: "16.2" },
 	],
     },

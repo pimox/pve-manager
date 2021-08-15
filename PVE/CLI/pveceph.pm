@@ -116,7 +116,8 @@ __PACKAGE__->register_method ({
 	properties => {
 	    version => {
 		type => 'string',
-		enum => ['octopus', 'pacific'],
+		#enum => ['octopus', 'pacific'],
+		enum => ['pacific'],
 		default => 'pacific',
 		description => "Ceph version to install.",
 		optional => 1,
@@ -143,15 +144,15 @@ __PACKAGE__->register_method ({
 
 	my $repo = $param->{'test-repository'} ? 'test' : 'main';
 
-	my $repolist;
-	if ($cephver eq 'octopus') {
-	    $repolist = "deb http://download.proxmox.com/debian/ceph-octopus bullseye $repo\n";
-	} elsif ($cephver eq 'pacific') {
-	    $repolist = "deb http://download.proxmox.com/debian/ceph-pacific bullseye $repo\n";
-	} else {
-	    die "unsupported ceph version: $cephver";
-	}
-	PVE::Tools::file_set_contents("/etc/apt/sources.list.d/ceph.list", $repolist);
+	#my $repolist;
+	#if ($cephver eq 'octopus') {
+	#$repolist = "deb http://download.proxmox.com/debian/ceph-octopus bullseye $repo\n";
+	#} elsif ($cephver eq 'pacific') {
+	#$repolist = "deb http://download.proxmox.com/debian/ceph-pacific bullseye $repo\n";
+	#} else {
+	#die "unsupported ceph version: $cephver";
+	#}
+	#PVE::Tools::file_set_contents("/etc/apt/sources.list.d/ceph.list", $repolist);
 
 	warn "WARNING: installing non-default ceph release '$cephver'!\n"
 	    if $cephver !~ qr/^(?:octopus|pacific)$/;
