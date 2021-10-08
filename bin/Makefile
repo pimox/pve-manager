@@ -7,7 +7,7 @@ PERL_DOC_INC_DIRS=..
 include /usr/share/pve-doc-generator/pve-doc-generator.mk
 
 SERVICES = pvestatd pveproxy pvedaemon spiceproxy
-CLITOOLS = vzdump pvesubscription pveceph pveam pvesr pvenode pvesh pve5to6 pve6to7
+CLITOOLS = vzdump pvesubscription pveceph pveam pvesr pvenode pvesh pve6to7
 
 SCRIPTS =  			\
 	${SERVICES}		\
@@ -48,11 +48,9 @@ all: ${SERVICE_MANS} ${CLI_MANS} pvemailforward
 	podselect $* > $@.tmp
 	mv $@.tmp $@
 
-pve5to6.1:
-	echo ".TH pve5to6 1" > $@
-
 pve6to7.1:
-	echo ".TH pve6to7 1" > $@
+	printf ".TH PVE6TO7 1\n.SH NAME\npve6to7 \- Proxmox VE upgrade checker script for 6.4 to 7.x\n" > $@
+	printf ".SH SYNOPSIS\npve6to7 [--full]\n" >> $@
 
 pveversion.1.pod: pveversion
 pveupgrade.1.pod: pveupgrade

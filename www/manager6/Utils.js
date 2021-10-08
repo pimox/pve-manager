@@ -13,7 +13,7 @@ Ext.define('PVE.Utils', {
 
     toolkit: undefined, // (extjs|touch), set inside Toolkit.js
 
-    bus_match: /^(ide|sata|virtio|scsi)\d+$/,
+    bus_match: /^(ide|sata|virtio|scsi)(\d+)$/,
 
     log_severity_hash: {
 	0: "panic",
@@ -793,7 +793,7 @@ Ext.define('PVE.Utils', {
 	    backups: true,
 	},
 	cifs: {
-	    name: 'CIFS',
+	    name: 'SMB/CIFS',
 	    ipanel: 'CIFSInputPanel',
 	    faIcon: 'building',
 	    backups: true,
@@ -1602,7 +1602,7 @@ Ext.define('PVE.Utils', {
 	}
     },
 
-    hardware_counts: { net: 32, usb: 5, hostpci: 16, audio: 1, efidisk: 1, serial: 4, rng: 1 },
+    hardware_counts: { net: 32, usb: 5, hostpci: 16, audio: 1, efidisk: 1, serial: 4, rng: 1, tpmstate: 1 },
 
     cleanEmptyObjectKeys: function(obj) {
 	for (const propName of Object.keys(obj)) {
@@ -1756,6 +1756,52 @@ Ext.define('PVE.Utils', {
 	}
 
 	return true;
+    },
+
+    sortByPreviousUsage: function(vmconfig, controllerList) {
+	if (!controllerList) {
+	    controllerList = ['ide', 'virtio', 'scsi', 'sata'];
+	}
+	let usedControllers = {};
+	for (const type of Object.keys(PVE.Utils.diskControllerMaxIDs)) {
+	    usedControllers[type] = 0;
+	}
+
+	for (const property of Object.keys(vmconfig)) {
+	    if (property.match(PVE.Utils.bus_match) && !vmconfig[property].match(/media=cdrom/)) {
+		const foundController = property.match(PVE.Utils.bus_match)[1];
+		usedControllers[foundController]++;
+	    }
+	}
+
+	let sortPriority = PVE.qemu.OSDefaults.getDefaults(vmconfig.ostype).busPriority;
+
+	let sortedList = Ext.clone(controllerList);
+	sortedList.sort(function(a, b) {
+	    if (usedControllers[b] === usedControllers[a]) {
+		return sortPriority[b] - sortPriority[a];
+	    }
+	    return usedControllers[b] - usedControllers[a];
+	});
+
+	return sortedList;
+    },
+
+    nextFreeDisk: function(controllers, config) {
+	for (const controller of controllers) {
+	    for (let i = 0; i < PVE.Utils.diskControllerMaxIDs[controller]; i++) {
+		let confid = controller + i.toString();
+		if (!Ext.isDefined(config[confid])) {
+		    return {
+			controller,
+			id: i,
+			confid,
+		    };
+		}
+	    }
+	}
+
+	return undefined;
     },
 },
 

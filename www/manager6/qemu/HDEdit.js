@@ -17,27 +17,38 @@ Ext.define('PVE.qemu.HDInputPanel', {
 	xclass: 'Ext.app.ViewController',
 
 	onControllerChange: function(field) {
+	    let me = this;
 	    var value = field.getValue();
 
 	    var allowIOthread = value.match(/^(virtio|scsi)/);
-	    this.lookup('iothread').setDisabled(!allowIOthread);
+	    me.lookup('iothread').setDisabled(!allowIOthread);
 	    if (!allowIOthread) {
-		this.lookup('iothread').setValue(false);
+		me.lookup('iothread').setValue(false);
 	    }
 
 	    var virtio = value.match(/^virtio/);
-	    this.lookup('ssd').setDisabled(virtio);
+	    me.lookup('ssd').setDisabled(virtio);
 	    if (virtio) {
-		this.lookup('ssd').setValue(false);
+		me.lookup('ssd').setValue(false);
 	    }
 
-	    this.lookup('scsiController').setVisible(value.match(/^scsi/));
+	    me.lookup('scsiController').setVisible(value.match(/^scsi/));
+
+	    me.fireIdChange();
+	},
+
+	fireIdChange: function() {
+	    let view = this.getView();
+	    view.fireEvent('diskidchange', view, view.bussel.getConfId());
 	},
 
 	control: {
 	    'field[name=controller]': {
 		change: 'onControllerChange',
 		afterrender: 'onControllerChange',
+	    },
+	    'field[name=deviceid]': {
+		change: 'fireIdChange',
 	    },
 	    'field[name=iothread]': {
 		change: function(f, value) {
@@ -155,6 +166,8 @@ Ext.define('PVE.qemu.HDInputPanel', {
 	me.down('#hdimage').setStorage(undefined, nodename);
     },
 
+    hasAdvanced: true,
+
     initComponent: function() {
 	var me = this;
 
@@ -162,17 +175,17 @@ Ext.define('PVE.qemu.HDInputPanel', {
 
 	me.drive = {};
 
-	me.column1 = [];
-	me.column2 = [];
+	let column1 = [];
+	let column2 = [];
 
-	me.advancedColumn1 = [];
-	me.advancedColumn2 = [];
+	let advancedColumn1 = [];
+	let advancedColumn2 = [];
 
 	if (!me.confid || me.unused) {
 	    me.bussel = Ext.create('PVE.form.ControllerSelector', {
 		vmconfig: me.insideWizard ? { ide2: 'cdrom' } : {},
 	    });
-	    me.column1.push(me.bussel);
+	    column1.push(me.bussel);
 
 	    me.scsiController = Ext.create('Ext.form.field.Display', {
 		fieldLabel: gettext('SCSI Controller'),
@@ -184,7 +197,7 @@ Ext.define('PVE.qemu.HDInputPanel', {
 		submitValue: false,
 		hidden: true,
 	    });
-	    me.column1.push(me.scsiController);
+	    column1.push(me.scsiController);
 	}
 
 	if (me.unused) {
@@ -198,9 +211,9 @@ Ext.define('PVE.qemu.HDInputPanel', {
 		data: [],
 		allowBlank: false,
 	    });
-	    me.column1.push(me.unusedDisks);
+	    column1.push(me.unusedDisks);
 	} else if (me.isCreate) {
-	    me.column1.push({
+	    column1.push({
 		xtype: 'pveDiskStorageSelector',
 		storageContent: 'images',
 		name: 'disk',
@@ -208,7 +221,7 @@ Ext.define('PVE.qemu.HDInputPanel', {
 		autoSelect: me.insideWizard,
 	    });
 	} else {
-	    me.column1.push({
+	    column1.push({
 		xtype: 'textfield',
 		disabled: true,
 		submitValue: false,
@@ -217,7 +230,7 @@ Ext.define('PVE.qemu.HDInputPanel', {
 	    });
 	}
 
-	me.column2.push(
+	column2.push(
 	    {
 		xtype: 'CacheTypeSelector',
 		name: 'cache',
@@ -232,7 +245,7 @@ Ext.define('PVE.qemu.HDInputPanel', {
 	    },
 	);
 
-	me.advancedColumn1.push(
+	advancedColumn1.push(
 	    {
 		xtype: 'proxmoxcheckbox',
 		disabled: me.confid && me.confid.match(/^virtio/),
@@ -249,6 +262,31 @@ Ext.define('PVE.qemu.HDInputPanel', {
 		reference: 'iothread',
 		name: 'iothread',
 	    },
+	);
+
+	advancedColumn2.push(
+	    {
+		xtype: 'proxmoxcheckbox',
+		fieldLabel: gettext('Backup'),
+		autoEl: {
+		    tag: 'div',
+		    'data-qtip': gettext('Include volume in backup job'),
+		},
+		labelWidth: labelWidth,
+		name: 'backup',
+		bind: {
+		    value: '{isIncludedInBackup}',
+		},
+	    },
+	    {
+		xtype: 'proxmoxcheckbox',
+		fieldLabel: gettext('Skip replication'),
+		labelWidth: labelWidth,
+		name: 'noreplicate',
+	    },
+	);
+
+	let bwColumn1 = [
 	    {
 		xtype: 'numberfield',
 		name: 'mbps_rd',
@@ -285,28 +323,9 @@ Ext.define('PVE.qemu.HDInputPanel', {
 		labelWidth: labelWidth,
 		emptyText: gettext('unlimited'),
 	    },
-	);
+	];
 
-	me.advancedColumn2.push(
-	    {
-		xtype: 'proxmoxcheckbox',
-		fieldLabel: gettext('Backup'),
-		autoEl: {
-		    tag: 'div',
-		    'data-qtip': gettext('Include volume in backup job'),
-		},
-		labelWidth: labelWidth,
-		name: 'backup',
-		bind: {
-		    value: '{isIncludedInBackup}',
-		},
-	    },
-	    {
-		xtype: 'proxmoxcheckbox',
-		fieldLabel: gettext('Skip replication'),
-		labelWidth: labelWidth,
-		name: 'noreplicate',
-	    },
+	let bwColumn2 = [
 	    {
 		xtype: 'numberfield',
 		name: 'mbps_rd_max',
@@ -343,9 +362,45 @@ Ext.define('PVE.qemu.HDInputPanel', {
 		labelWidth: labelWidth,
 		emptyText: gettext('default'),
 	    },
-	);
+	];
+
+	me.items = [
+	    {
+		xtype: 'tabpanel',
+		plain: true,
+		bodyPadding: 10,
+		border: 0,
+		items: [
+		    {
+			title: gettext('Disk'),
+			xtype: 'inputpanel',
+			reference: 'diskpanel',
+			column1,
+			column2,
+			advancedColumn1,
+			advancedColumn2,
+			showAdvanced: me.showAdvanced,
+			getValues: () => ({}),
+		    },
+		    {
+			title: gettext('Bandwidth'),
+			xtype: 'inputpanel',
+			reference: 'bwpanel',
+			column1: bwColumn1,
+			column2: bwColumn2,
+			showAdvanced: me.showAdvanced,
+			getValues: () => ({}),
+		    },
+		],
+	    },
+	];
 
 	me.callParent();
+    },
+
+    setAdvancedVisible: function(visible) {
+	this.lookup('diskpanel').setAdvancedVisible(visible);
+	this.lookup('bwpanel').setAdvancedVisible(visible);
     },
 });
 
@@ -355,6 +410,9 @@ Ext.define('PVE.qemu.HDEdit', {
     isAdd: true,
 
     backgroundDelay: 5,
+
+    width: 600,
+    bodyPadding: 0,
 
     initComponent: function() {
 	var me = this;

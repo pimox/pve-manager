@@ -150,12 +150,16 @@ sub purge_all_ceph_services {
     }
 }
 
+sub ceph_install_flag_file { return '/run/pve-ceph-install-flag' };
+
 sub check_ceph_installed {
     my ($service, $noerr) = @_;
 
     $service = 'ceph_bin' if !defined($service);
 
-    if (! -x $ceph_service->{$service}) {
+    # NOTE: the flag file is checked as on a new installation, the binary gets
+    # extracted by dpkg before the installation is finished
+    if (! -x $ceph_service->{$service} || -f ceph_install_flag_file()) {
 	die "binary not installed: $ceph_service->{$service}\n" if !$noerr;
 	return undef;
     }
@@ -332,29 +336,6 @@ sub get_or_create_admin_keyring {
     }
     return $pve_ckeyring_path;
 }
-
-# wipe the first 200 MB to clear off leftovers from previous use, otherwise a
-# create OSD fails.
-sub wipe_disks {
-    my (@devs) = @_;
-
-    my @wipe_cmd = qw(/bin/dd if=/dev/zero bs=1M conv=fdatasync);
-
-    foreach my $devpath (@devs) {
-	my $devname = basename($devpath);
-	my $dev_size = PVE::Tools::file_get_contents("/sys/class/block/$devname/size");
-
-	($dev_size) = $dev_size =~ m|(\d+)|; # untaint $dev_size
-	die "Coulnd't get the size of the device $devname\n" if (!defined($dev_size));
-
-	my $size = ($dev_size * 512 / 1024 / 1024);
-	my $count = ($size < 200) ? $size : 200;
-
-	print "wipe disk/partition: $devpath\n";
-	eval { run_command([@wipe_cmd, "count=$count", "of=${devpath}"]) };
-	warn $@ if $@;
-    }
-};
 
 # get ceph-volume managed osds
 sub ceph_volume_list {

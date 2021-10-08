@@ -79,6 +79,7 @@ JSSRC= 							\
 	grid/Replication.js				\
 	grid/ResourceGrid.js				\
 	panel/ConfigPanel.js				\
+	panel/BackupJobPrune.js				\
 	panel/HealthWidget.js				\
 	panel/IPSet.js					\
 	panel/NotesView.js				\
@@ -123,6 +124,7 @@ JSSRC= 							\
 	dc/AuthEditLDAP.js				\
 	dc/AuthEditOpenId.js				\
 	dc/AuthView.js					\
+	dc/BackupJobDetail.js				\
 	dc/Backup.js					\
 	dc/Cluster.js					\
 	dc/ClusterEdit.js				\
@@ -203,6 +205,7 @@ JSSRC= 							\
 	qemu/DisplayEdit.js				\
 	qemu/HDEdit.js					\
 	qemu/HDEfi.js					\
+	qemu/HDTPM.js					\
 	qemu/HDMove.js					\
 	qemu/HDResize.js				\
 	qemu/HardwareView.js				\

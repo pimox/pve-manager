@@ -336,6 +336,7 @@ Ext.define('PVE.ceph.CephInstallWizard', {
 	    xtype: 'inputpanel',
 	    title: gettext('Configuration'),
 	    onlineHelp: 'chapter_pveceph',
+	    height: 300,
 	    cbind: {
 		nodename: '{nodename}',
 	    },
@@ -349,7 +350,7 @@ Ext.define('PVE.ceph.CephInstallWizard', {
 		activate: function() {
 		    this.up('pveCephInstallWizard').down('#submit').setText(gettext('Next'));
 		},
-		beforeshow: function() {
+		afterrender: function() {
 		    if (this.up('pveCephInstallWizard').getViewModel().get('configuration')) {
 			this.mask("Configuration already initialized", ['pve-static-mask']);
 		    } else {

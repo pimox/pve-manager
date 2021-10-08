@@ -319,29 +319,35 @@ __PACKAGE__->register_method ({
 	    }
 	}
 
-	# test osd requirements early
-	my $devlist = [ map { $_->{name} } values %$devs ];
-	my $disklist = PVE::Diskmanage::get_disks($devlist, 1);
-	my $dev = $devs->{dev}->{dev};
-	my $devname = $devs->{dev}->{name};
-	die "unable to get device info for '$dev'\n" if !$disklist->{$devname};
-	die "device '$dev' is already in use\n" if $disklist->{$devname}->{used};
+	my $test_disk_requirements = sub {
+	    my ($disklist) = @_;
 
-	# test db/wal requirements early
-	for my $type ( qw(db_dev wal_dev) ) {
-	    my $d = $devs->{$type};
-	    next if !$d;
-	    my $name = $d->{name};
-	    my $info = $disklist->{$name};
-	    die "unable to get device info for '$d->{dev}' for type $type\n" if !$disklist->{$name};
-	    if (my $usage = $info->{used}) {
-		if ($usage eq 'partitions') {
-		    die "device '$d->{dev}' is not GPT partitioned\n" if !$info->{gpt};
-		} elsif ($usage ne 'LVM') {
-		    die "device '$d->{dev}' is already in use and has no LVM on it\n";
+	    my $dev = $devs->{dev}->{dev};
+	    my $devname = $devs->{dev}->{name};
+	    die "unable to get device info for '$dev'\n" if !$disklist->{$devname};
+	    die "device '$dev' is already in use\n" if $disklist->{$devname}->{used};
+
+	    for my $type ( qw(db_dev wal_dev) ) {
+		my $d = $devs->{$type};
+		next if !$d;
+		my $name = $d->{name};
+		my $info = $disklist->{$name};
+		die "unable to get device info for '$d->{dev}' for type $type\n" if !$disklist->{$name};
+		if (my $usage = $info->{used}) {
+		    if ($usage eq 'partitions') {
+			die "device '$d->{dev}' is not GPT partitioned\n" if !$info->{gpt};
+		    } elsif ($usage ne 'LVM') {
+			die "device '$d->{dev}' is already in use and has no LVM on it\n";
+		    }
 		}
 	    }
-	}
+	};
+
+
+	# test disk requirements early
+	my $devlist = [ map { $_->{name} } values %$devs ];
+	my $disklist = PVE::Diskmanage::get_disks($devlist, 1);
+	$test_disk_requirements->($disklist);
 
 	# get necessary ceph infos
 	my $rados = PVE::RADOS->new();
@@ -365,6 +371,9 @@ __PACKAGE__->register_method ({
 	    file_set_contents($ceph_bootstrap_osd_keyring, $bindata);
 	};
 
+	# See FIXME below
+	my @udev_trigger_devs = ();
+
 	my $create_part_or_lv = sub {
 	    my ($dev, $size, $type) = @_;
 
@@ -386,6 +395,8 @@ __PACKAGE__->register_method ({
 
 		PVE::Storage::LVMPlugin::lvm_create_volume_group($dev->{devpath}, $vg);
 		PVE::Storage::LVMPlugin::lvcreate($vg, $lv, "${size}k");
+
+		push @udev_trigger_devs, $dev->{devpath};
 
 		return "$vg/$lv";
 
@@ -417,7 +428,9 @@ __PACKAGE__->register_method ({
 	    } elsif ($dev->{used} eq 'partitions' && $dev->{gpt}) {
 		# create new partition at the end
 
-		return PVE::Diskmanage::append_partition($dev->{devpath}, $size * 1024);
+		my $part = PVE::Diskmanage::append_partition($dev->{devpath}, $size * 1024);
+		push @udev_trigger_devs, $part;
+		return $part;
 	    }
 
 	    die "cannot use '$dev->{devpath}' for '$type'\n";
@@ -427,15 +440,19 @@ __PACKAGE__->register_method ({
 	    my $upid = shift;
 
 	    PVE::Diskmanage::locked_disk_action(sub {
-		# update disklist
+		# update disklist and re-test requirements
 		$disklist = PVE::Diskmanage::get_disks($devlist, 1);
+		$test_disk_requirements->($disklist);
 
 		my $dev_class = $param->{'crush-device-class'};
 		my $cmd = ['ceph-volume', 'lvm', 'create', '--cluster-fsid', $fsid ];
 		push @$cmd, '--crush-device-class', $dev_class if $dev_class;
 
+		my $devname = $devs->{dev}->{name};
 		my $devpath = $disklist->{$devname}->{devpath};
 		print "create OSD on $devpath (bluestore)\n";
+
+		push @udev_trigger_devs, $devpath;
 
 		my $osd_size = $disklist->{$devname}->{size};
 		my $size_map = {
@@ -465,13 +482,19 @@ __PACKAGE__->register_method ({
 		push @$cmd, '--data', $devpath;
 		push @$cmd, '--dmcrypt' if $param->{encrypted};
 
-		PVE::Ceph::Tools::wipe_disks($devpath);
+		PVE::Diskmanage::wipe_blockdev($devpath);
 
 		run_command($cmd);
+
+		# FIXME: Remove once we depend on systemd >= v249.
+		# Work around udev bug https://github.com/systemd/systemd/issues/18525 to ensure the
+		# udev database is updated.
+		eval { run_command(['udevadm', 'trigger', @udev_trigger_devs]); };
+		warn $@ if $@;
 	    });
 	};
 
-	return $rpcenv->fork_worker('cephcreateosd', $devname,  $authuser, $worker);
+	return $rpcenv->fork_worker('cephcreateosd', $devs->{dev}->{name},  $authuser, $worker);
     }});
 
 # Check if $osdid belongs to $nodename
@@ -575,6 +598,9 @@ __PACKAGE__->register_method ({
 	    # try to unmount from standard mount point
 	    my $mountpoint = "/var/lib/ceph/osd/ceph-$osdid";
 
+	    # See FIXME below
+	    my $udev_trigger_devs = {};
+
 	    my $remove_partition = sub {
 		my ($part) = @_;
 
@@ -582,7 +608,9 @@ __PACKAGE__->register_method ({
 		my $partnum = PVE::Diskmanage::get_partnum($part);
 		my $devpath = PVE::Diskmanage::get_blockdev($part);
 
-		PVE::Ceph::Tools::wipe_disks($part);
+		$udev_trigger_devs->{$devpath} = 1;
+
+		PVE::Diskmanage::wipe_blockdev($part);
 		print "remove partition $part (disk '${devpath}', partnum $partnum)\n";
 		eval { run_command(['/sbin/sgdisk', '-d', $partnum, "${devpath}"]); };
 		warn $@ if $@;
@@ -603,6 +631,8 @@ __PACKAGE__->register_method ({
 
 			    eval { run_command(['/sbin/pvremove', $dev], errfunc => sub {}) };
 			    warn $@ if $@;
+
+			    $udev_trigger_devs->{$dev} = 1;
 			}
 		    }
 		}
@@ -639,6 +669,14 @@ __PACKAGE__->register_method ({
 			$remove_partition->($part);
 		    }
 		}
+	    }
+
+	    # FIXME: Remove once we depend on systemd >= v249.
+	    # Work around udev bug https://github.com/systemd/systemd/issues/18525 to ensure the
+	    # udev database is updated.
+	    if ($cleanup) {
+		eval { run_command(['udevadm', 'trigger', keys $udev_trigger_devs->%*]); };
+		warn $@ if $@;
 	    }
 	};
 
